@@ -1,6 +1,6 @@
 🏗️ Construction Project Dashboard
 A real-time construction project management dashboard built with pure frontend technology. By connecting directly to Google Sheets, it achieves real-time data visualization and multi-dimensional analysis without the need for any backend servers or databases.
-
+Online display: [Construction Project Dashboard](https://gentle-biscochitos-bb0275.netlify.app/)
 Dashboard Preview
 
 ✨ Key Features
