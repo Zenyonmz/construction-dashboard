@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=1920">
     <title>Construction Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
@@ -130,141 +131,320 @@
 <div class="alert-box" id="alertBox"><i class="fas fa-filter"></i><span id="alertText"></span><button class="alert-clear" onclick="resetFilters()">Clear Filters</button></div>
 
 <script>
-/* ==================================================================
-   1. 定义常量与配置 (移到前面，避免初始化前调用报错)
-   ================================================================== */
-const CATEGORIES=['Healthcare','Education','Residential','Commercial','Infrastructure','Data Centre','Hospitality','Industrial','Retail','Government'];
+/* ==================== Google Sheets 配置 ==================== */
+const SHEET_ID = '1ZSo9azg8gLGZIkajbx54nqWbxsdmM_R51cfIiXihkpM';   // ← 改成你的表格ID
+const SHEET_NAME = 'Project';                     // ← 改成你的工作表名
+const AUTO_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
 
-const SHEET_CSV='https://docs.google.com/spreadsheets/d/e/2PACX-1vRU5DURgAOvaa2LeHJZQ9dIRUkq3UE5FeGw2Yy2c_xQyXQz9EwbETlEZ3v0BZubeD3DL8vwiUxUZtyK/pub?gid=980586329&single=true&output=csv';
-let ALL=[];
+/* ==================== 全局数据 ==================== */
+let ALL = [];
+let TOTAL_PROJECTS = 0;
 
-/* ==================================================================
-   2. 数据解析辅助函数
-   ================================================================== */
-function parseCSV(t){const l=t.split('\n').filter(x=>x.trim());if(l.length<2)return[];const h=parseL(l[0]);return l.slice(1).map(s=>{const v=parseL(s);const o={};h.forEach((k,i)=>o[k.trim()]=(v[i]||'').trim());return o})}
-function parseL(s){const r=[];let c='',q=false;for(let i=0;i<s.length;i++){const ch=s[i];if(q){if(ch==='"'&&s[i+1]==='"'){c+='"';i++}else if(ch==='"')q=false;else c+=ch}else{if(ch==='"')q=true;else if(ch===','){r.push(c);c=''}else c+=ch}}r.push(c);return r}
-
-// 增强日期解析，兼容 / 和 -
-function pD(s){if(!s)return null;const p=s.split(/[\/\-]/);if(p.length===3){const d=new Date(+p[2],p[1]-1,+p[0]);if(!isNaN(d))return d}return new Date(s)}
-
-// 增强数字解析，去除逗号、美元符号等
-function pNum(s){if(!s)return 0;return Number(String(s).replace(/[^0-9.-]/g, ''))||0;}
-
-function mapR(r){
-    const s=r['Status']||'',af=pD(r['Actual Finish']),ef=pD(r['Expected Finish']);
-    let onTime=null;if(s==='Completed')onTime=(af&&ef&&af<=ef)?true:false;
-    return{
-        id:r['Project ID']||'',
-        contractor:r['Contractor']||'',
-        category:r['Category']||'',
-        state:r['State']||'',
-        city:r['City']||'',
-        status:s,
-        risk:r['Risk Level']||'',
-        cv:pNum(r['Contract Value']),
-        var_:pNum(r['Variation Value']),
-        cur:pNum(r['Current Contract']),
-        paid:pNum(r['Paid to Date']),
-        out:pNum(r['Outstanding']),
-        comp:pNum(String(r['Completion %']).replace('%','')),
-        inv:pNum(r['Invoice Count']),
-        rating:pNum(r['Contractor Rating']),
-        startD:pD(r['Start Date']),
-        expF:ef,
-        actF:af,
-        onTime
-    }
+/* ==================== 工具函数 ==================== */
+function fmtC(v){if(v>=1e9)return'$'+(v/1e9).toFixed(2)+'B';if(v>=1e6)return'$'+(v/1e6).toFixed(1)+'M';if(v>=1e3)return'$'+(v/1e3).toFixed(0)+'K';return'$'+v}
+function fmtN(v){return v.toLocaleString()}
+function pctTooltip(ctx){
+    const t=ctx.dataset.data.reduce((a,b)=>a+b,0);
+    const pct=t?((ctx.raw/t)*100).toFixed(1):'0.0';
+    return ctx.label+': '+fmtN(ctx.raw)+' ('+pct+'%)';
 }
 
-async function loadSheet(){
-    try{
-        const r=await fetch(SHEET_CSV);
-        if(!r.ok)throw new Error('HTTP '+r.status);
-        const t=await r.text();
-        ALL=parseCSV(t).map(mapR).filter(p=>p.id);
+/* ==================== Sheets 数据加载 ==================== */
+function normalizeRow(row) {
+    const keys = Object.keys(row);
+    const get = (names) => {
+        for (let n of names) {
+            const m = keys.find(k => k.toLowerCase().replace(/\s/g,'') === n.toLowerCase().replace(/\s/g,''));
+            if (m !== undefined) return row[m];
+        }
+        return '';
+    };
+    const num = (v) => Number((v || '0').toString().replace(/[$,]/g, ''));
+    return {
+        id: get(['Project ID','ID','id']),
+        contractor: get(['Contractor','contractor']),
+        category: get(['Category','category']),
+        state: get(['State','state']),
+        city: get(['City','city']),
+        status: get(['Status','status']),
+        risk: get(['Risk','risk']),
+        cv: num(get(['Contract Value','cv'])),
+        var_: num(get(['Variation','Var','var_','var'])),
+        cur: num(get(['Current Value','cur','Current'])),
+        paid: num(get(['Paid','Paid to Date','paid'])),
+        out: num(get(['Outstanding','out'])),
+        comp: Number(get(['Completion','comp','% Complete']) || 0),
+        startD: new Date(get(['Start Date','startD','Start'])),
+        expF: new Date(get(['Expected Finish','expF','Expected'])),
+        actF: (()=>{const v=get(['Actual Finish','actF','Actual']); return v?new Date(v):null;})(),
+        onTime: (get(['On Time','onTime','Ontime'])||'').toString().toLowerCase()==='true',
+        priority: get(['Priority','priority']),
+        client: get(['Client','client']),
+        manager: get(['Manager','manager']),
+        inv: Number(get(['Invoices','inv']) || 0),
+        rating: Number(get(['Rating','rating']) || 0)
+    };
+}
+
+async function loadSheet() {
+    try {
+        const res = await fetch(AUTO_CSV_URL);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const csv = await res.text();
+        if (csv.trim().startsWith('<!DOCTYPE')) throw new Error('表格未公开，请检查 Share 权限');
+        const parsed = Papa.parse(csv, { header: true, skipEmptyLines: true });
+        console.log('✅ Sheets 读取成功，行数:', parsed.data.length);
+        console.log('表头:', Object.keys(parsed.data[0]||{}));
+        ALL = parsed.data.map(normalizeRow).filter(r => r.id);
+        TOTAL_PROJECTS = ALL.length;
         return true;
-    }catch(e){
-        console.error('Sheet failed:',e);
+    } catch (e) {
+        console.error('❌ 自动读取失败:', e);
         return false;
     }
 }
 
-/* ==================================================================
-   3. UI 渲染逻辑
-   ================================================================== */
-function fmtC(v){if(v>=1e9)return'$'+(v/1e9).toFixed(2)+'B';if(v>=1e6)return'$'+(v/1e6).toFixed(1)+'M';if(v>=1e3)return'$'+(v/1e3).toFixed(0)+'K';return'$'+v}
-function fmtN(v){return v.toLocaleString()}
+function loadFile(file) {
+    Papa.parse(file, {
+        header: true, skipEmptyLines: true,
+        complete: (res) => {
+            ALL = res.data.map(normalizeRow).filter(r => r.id);
+            TOTAL_PROJECTS = ALL.length;
+            boot();
+        },
+        error: (e) => alert('CSV 解析失败: ' + e.message)
+    });
+}
 
+function showFallback() {
+    const box = document.getElementById('alertBox');
+    document.getElementById('alertText').innerHTML =
+        `无法自动连接 Google Sheets。<br>
+         <input type="file" id="csvUp" accept=".csv" style="display:none">
+         <button onclick="document.getElementById('csvUp').click()" style="margin-top:6px;padding:3px 10px;border-radius:4px;border:1px solid var(--accent);background:var(--accent-dim);color:var(--accent);cursor:pointer">📁 上传 CSV 文件</button>`;
+    box.classList.add('visible');
+    document.getElementById('csvUp').addEventListener('change', e => {
+        if(e.target.files[0]) loadFile(e.target.files[0]);
+    });
+}
+
+/* ==================== 原有功能（全部保留）==================== */
 function popFilters(){
-    const fill=(id,opts)=>{const s=document.getElementById(id);opts.sort().forEach(o=>{const op=document.createElement('option');op.value=o;op.textContent=o;s.appendChild(op)})};
-    fill('fCat',[...new Set(ALL.map(p=>p.category))]);
-    fill('fStat',[...new Set(ALL.map(p=>p.status))]);
-    fill('fState',[...new Set(ALL.map(p=>p.state))]);
-    fill('fCont',[...new Set(ALL.map(p=>p.contractor))]);
+    const fill=(id,opts)=>{
+        const s=document.getElementById(id);
+        while(s.options.length>1) s.remove(1); // 清空旧选项，保留 All
+        [...new Set(opts)].sort().forEach(o=>{
+            if(!o) return;
+            const op=document.createElement('option');
+            op.value=o; op.textContent=o;
+            s.appendChild(op);
+        });
+    };
+    fill('fCat',ALL.map(p=>p.category));
+    fill('fStat',ALL.map(p=>p.status));
+    fill('fState',ALL.map(p=>p.state));
+    fill('fCont',ALL.map(p=>p.contractor));
 }
 
 function filtered(){
-    const c=document.getElementById('fCat').value,s=document.getElementById('fStat').value,t=document.getElementById('fState').value,o=document.getElementById('fCont').value;
+    const c=document.getElementById('fCat').value;
+    const s=document.getElementById('fStat').value;
+    const t=document.getElementById('fState').value;
+    const o=document.getElementById('fCont').value;
     return ALL.filter(p=>(c==='All'||p.category===c)&&(s==='All'||p.status===s)&&(t==='All'||p.state===t)&&(o==='All'||p.contractor===o));
 }
+
 function filterActive(){return['fCat','fStat','fState','fCont'].some(id=>document.getElementById(id).value!=='All')}
 
+function resetFilters(){
+    ['fCat','fStat','fState','fCont'].forEach(id=>document.getElementById(id).value='All');
+    onFilter();
+}
+
 function updKPI(P){
-    const n=P.length,cv=P.reduce((s,p)=>s+p.cv,0),paid=P.reduce((s,p)=>s+p.paid,0),out=P.reduce((s,p)=>s+p.out,0),comp=n?P.reduce((s,p)=>s+p.comp,0)/n:0,done=P.filter(p=>p.status==='Completed').length,delay=P.filter(p=>p.status==='Delayed').length,hi=P.filter(p=>p.risk==='High').length;
-    document.getElementById('kTotal').textContent=fmtN(n);document.getElementById('kContract').textContent=fmtC(cv);document.getElementById('kPaid').textContent=fmtC(paid);document.getElementById('kOut').textContent=fmtC(out);document.getElementById('kComp').textContent=comp.toFixed(1)+'%';document.getElementById('kDone').textContent=fmtN(done);document.getElementById('kDelay').textContent=fmtN(delay);document.getElementById('kRisk').textContent=fmtN(hi);
-    document.getElementById('headerCount').textContent=n+' Active Projects';
+    const n=P.length;
+    const cv=P.reduce((s,p)=>s+p.cur,0);
+    const paid=P.reduce((s,p)=>s+p.paid,0);
+    const out=P.reduce((s,p)=>s+p.out,0);
+    const comp=n?P.reduce((s,p)=>s+p.comp,0)/n:0;
+    const done=P.filter(p=>p.status==='Completed').length;
+    const delay=P.filter(p=>p.status==='Delayed').length;
+    const hi=P.filter(p=>p.risk==='High').length;
+
+    document.getElementById('kTotal').textContent=fmtN(n);
+    document.getElementById('kContract').textContent=fmtC(cv);
+    document.getElementById('kPaid').textContent=fmtC(paid);
+    document.getElementById('kOut').textContent=fmtC(out);
+    document.getElementById('kComp').textContent=comp.toFixed(1)+'%';
+    document.getElementById('kDone').textContent=fmtN(done);
+    document.getElementById('kDelay').textContent=fmtN(delay);
+    document.getElementById('kRisk').textContent=fmtN(hi);
+
+    const hc=document.getElementById('headerCount');
+    if(filterActive()){
+        hc.textContent=n+' / '+TOTAL_PROJECTS+' Filtered';
+    }else{
+        hc.textContent=TOTAL_PROJECTS+' Active Projects';
+    }
+
     const wb=document.getElementById('warnBanner');
-    if(delay>0||hi>0){const m=[];if(delay>0)m.push(delay+' delayed');if(hi>0)m.push(hi+' high risk');m.push('Outstanding: '+fmtC(out));document.getElementById('warnText').textContent=m.join(' · ');wb.style.display='flex'}else wb.style.display='none';
+    if(delay>0||hi>0){
+        const msgs=[];
+        if(delay>0)msgs.push(delay+' delayed');
+        if(hi>0)msgs.push(hi+' high risk');
+        msgs.push('Outstanding: '+fmtC(out));
+        document.getElementById('warnText').textContent=msgs.join(' · ');
+        wb.style.display='flex';
+    }else wb.style.display='none';
 }
 
 function updAlert(P){
-    const box=document.getElementById('alertBox'),at=document.getElementById('alertText');
-    if(filterActive()){const a=[];const c=document.getElementById('fCat').value,s=document.getElementById('fStat').value,t=document.getElementById('fState').value,o=document.getElementById('fCont').value;if(c!=='All')a.push('Cat: '+c);if(s!=='All')a.push('Status: '+s);if(t!=='All')a.push('State: '+t);if(o!=='All')a.push('Contr: '+o);at.textContent='Filters active — '+a.join(', ')+' — '+P.length+' matching';box.classList.add('visible')}else box.classList.remove('visible');
+    const box=document.getElementById('alertBox');
+    const btn=document.getElementById('btnReset');
+    if(filterActive()){
+        const af=[];
+        const c=document.getElementById('fCat').value;
+        const s=document.getElementById('fStat').value;
+        const t=document.getElementById('fState').value;
+        const o=document.getElementById('fCont').value;
+        if(c!=='All')af.push('Category: '+c);
+        if(s!=='All')af.push('Status: '+s);
+        if(t!=='All')af.push('State: '+t);
+        if(o!=='All')af.push('Contractor: '+o);
+        document.getElementById('alertText').textContent=af.join(', ')+' — '+P.length+' matching';
+        box.classList.add('visible');
+        btn.classList.add('visible');
+    }else{
+        box.classList.remove('visible');
+        btn.classList.remove('visible');
+    }
 }
 
-Chart.defaults.color='#6b7280';Chart.defaults.borderColor='rgba(38,42,56,0.4)';Chart.defaults.font.family="'DM Sans',sans-serif";Chart.defaults.font.size=10;Chart.defaults.plugins.legend.labels.boxWidth=8;Chart.defaults.plugins.legend.labels.padding=5;Chart.defaults.animation.duration=500;
-const cPl={id:'ct',afterDraw(ch){const t=ch.config.options.plugins.ct;if(!t)return;const{ctx,chartArea:{left,right,top,bottom}}=ch;const cx=(left+right)/2,cy=(top+bottom)/2;ctx.save();ctx.font="bold 18px 'Space Grotesk'";ctx.fillStyle=t.c||'#e5e7eb';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(t.t,cx,cy-5);ctx.font="500 8px 'DM Sans'";ctx.fillStyle='#6b7280';ctx.fillText(t.s||'',cx,cy+10);ctx.restore()}};
-Chart.register(cPl);
+/* ==================== Chart 配置 ==================== */
+const isSmall=window.innerHeight<800;
+Chart.defaults.color='#6b7280';
+Chart.defaults.borderColor='rgba(38,42,56,0.4)';
+Chart.defaults.font.family="'DM Sans',sans-serif";
+Chart.defaults.font.size=10;
+Chart.defaults.plugins.legend.labels.boxWidth=8;
+Chart.defaults.plugins.legend.labels.padding=isSmall?2:5;
+Chart.defaults.animation.duration=500;
+
+const centerPlugin={
+    id:'centerTxt',
+    afterDraw(chart){
+        const ct=chart.config.options.plugins.centerTxt;
+        if(!ct)return;
+        const{ctx,chartArea:{left,right,top,bottom}}=chart;
+        const cx=(left+right)/2,cy=(top+bottom)/2;
+        ctx.save();
+        ctx.font=`bold ${isSmall?16:20}px 'Space Grotesk'`;
+        ctx.fillStyle=ct.color||'#e5e7eb';
+        ctx.textAlign='center';
+        ctx.textBaseline='middle';
+        ctx.fillText(ct.text,cx,cy-5);
+        ctx.font=`500 ${isSmall?8:9}px 'DM Sans'`;
+        ctx.fillStyle='#6b7280';
+        ctx.fillText(ct.sub||'',cx,cy+9);
+        ctx.restore();
+    }
+};
+Chart.register(centerPlugin);
 
 let chCat,chStat,chRisk,chOnT,chPaid,chTrend;
 
+/* ==================== 渲染函数 ==================== */
 function renderAll(P){rCat(P);rStat(P);rRisk(P);rOnTime(P);rPaid(P);rTrend(P);rTable(P)}
-function rCat(P){const d={};CATEGORIES.forEach(c=>d[c]=0);P.forEach(p=>d[p.]=(d[p.category]||0)+p.cv);const data={labels:Object.keys(d),datasets:[{data:Object.values(d),backgroundColor:['#f59e0b','#14b8a6','#f87171','#818cf8','#34d399','#38bdf8','#fb7185','#a78bfa','#a3e635','#fb923c'],borderRadius:3,borderSkipped:false}]};if(chCat){chCat.data=data;chCat.update()}else{chCat=new Chart(document.getElementById('cCat'),{type:'bar',data,options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmtC(c.raw)}}},scales:{x:{grid:{display:false},ticks:{font:{size:8},maxRotation:45}},y:{grid:{color:'rgba(38,42,56,0.3)'},ticks:{callback:v=>fmtC(v),font:{size:8}}}}}})}}
-function rStat(P){const d={'Completed':0,'Delayed':0,'In Progress':0,'Planning':0};P.forEach(p=>d[p.status]=(d[p.status]||0)+1);const data={labels:Object.keys(d),datasets:[{data:Object.values(d),backgroundColor:['#22c55e','#ef4444','#f59e0b','#818cf8'],borderWidth:0,hoverOffset:5}]};const t=P.length;if(chStat){chStat.data=data;chStat.options.plugins.ct={t:String(t),c:'#e5e7eb',s:'Total'};chStat.update()}else{chStat=new Chart(document.getElementById('cStat'),{type:'doughnut',data,options:{responsive:true,maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom',labels:{font:{size:9},padding:4}},tooltip:{callbacks:{label:c=>{const t=c.dataset.data.reduce((a,b)=>a+b,0);return c.label+': '+c.raw+' ('+(t?((c.raw/t)*100).toFixed(1):0)+'%)'}},ct:{t:String(t),c:'#e5e7eb',s:'Total'}}}})}}
-function rRisk(P){const d={'Low':0,'Medium':0,'High':0};P.forEach(p=>d[p.risk]=(d[p.risk]||0)+1);const data={labels:Object.keys(d),datasets:[{data:Object.values(d),backgroundColor:['#22c55e','#f59e0b','#ef4444'],borderWidth:0,hoverOffset:5}]};const hi=d['High'];if(chRisk){chRisk.data=data;chRisk.options.plugins.ct={t:String(hi),c:'#ef4444',s:'High Risk'};chRisk.update()}else{chRisk=new Chart(document.getElementById('cRisk'),{type:'doughnut',data,options:{responsive:true,maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom',labels:{font:{size:9},padding:4}},tooltip:{callbacks:{label:c=>{const t=c.dataset.data.reduce((a,b)=>a+b,0);return c.label+': '+c.raw+' ('+(t?((c.raw/t)*100).toFixed(1):0)+'%)'}},ct:{t:String(hi),c:'#ef4444',s:'High Risk'}}}})}}
-function rOnTime(P){const comp=P.filter(p=>p.status==='Completed'),onT=comp.filter(p=>p.onTime===true).length,dF=comp.filter(p=>p.onTime===false).length,nC=P.filter(p=>p.status!=='Completed').length;const pct=comp.length?((onT/comp.length)*100).toFixed(1):'0.0';const data={labels:['On Time','Delayed Finish','Not Completed'],datasets:[{data:[onT,dF,nC],backgroundColor:['#22c55e','#ef4444','#f59e0b'],borderWidth:0,hoverOffset:5}]};if(chOnT){chOnT.data=data;chOnT.options.plugins.ct={t:pct+'%',c:'#22c55e',s:'Of Completed'};chOnT.update()}else{chOnT=new Chart(document.getElementById('cOnTime'),{type:'doughnut',data,options:{responsive:true,maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom',labels:{font:{size:9},padding:4}},tooltip:{callbacks:{label:c=>{const t=c.dataset.data.reduce((a,b)=>a+b,0);return c.label+': '+c.raw+' ('+(t?((c.raw/t)*100).toFixed(1):0)+'%)'}},ct:{t:pct+'%',c:'#22c55e',s:'Of Completed'}}}})}}
-function rPaid(P){const d={};P.forEach(p=>d[p.contractor]=(d[p.contractor]||0)+p.paid);const s=Object.entries(d).sort((a,b)=>b[1]-a[1]).slice(0,10);const data={labels:s.map(x=>x[0]),datasets:[{data:s.map(x=>x[1]),backgroundColor:'#14b8a6',borderRadius:3,borderSkipped:false}]};if(chPaid){chPaid.data=data;chPaid.update()}else{chPaid=new Chart(document.getElementById('cPaid'),{type:'bar',data,options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmtC(c.raw)}}},scales:{x:{grid:{color:'rgba(38,42,56,0.3)'},ticks:{callback:v=>fmtC(v),font:{size:8}}},y:{grid:{display:false},ticks:{font:{size:8}}}}}})}}
-function rTrend(P){const d={};P.forEach(p=>{if(!p.startD)return;const k=p.startD.getFullYear()+'-'+String(p.startD.getMonth()+1).padStart(2,'0');d[k]=(d[k]||0)+p.cv});const sm=Object.keys(d).sort();const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];const labels=sm.map(m=>{const[y,mo]=m.split('-');return mn[parseInt(mo)-1]+" '"+y.slice(2)});const data={labels,datasets:[{data:sm.map(m=>d[m]),borderColor:'#14b8a6',backgroundColor:'rgba(20,184,166,0.08)',fill:true,tension:0.35,pointRadius:2,pointBackgroundColor:'#f59e0b',pointBorderColor:'#f59e0b',borderWidth:1.5}]};if(chTrend){chTrend.data=data;chTrend.update()}else{chTrend=new Chart(document.getElementById('cTrend'),{type:'line',data,options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmtC(c.raw)}}},scales:{x:{grid:{display:false},ticks:{font:{size:8},maxRotation:45}},y:{grid:{color:'rgba(38,42,56,0.3)'},ticks:{callback:v=>fmtC(v),font:{size:8}}}}}})}}
-function rTable(P){const d={};P.forEach(p=>{if(!d[p.contractor])d[p.contractor]={v:0,n:0};d[p.contractor].v+=p.cur;d[p.contractor].n++});const s=Object.entries(d).sort((a,b)=>b[1].v-a[1].v).slice(0,10);let h='<table><thead><tr><th>Rank</th><th>Contractor</th><th>Projects</th><th>Value</th></tr></thead><tbody>';s.forEach(([nm,dt],i)=>{const rc=i<3?'var(--accent)':'var(--muted)',rb=i<3?'var(--accent-dim)':'transparent';h+=`<tr><td><span class="rank-badge" style="background:${rb};color:${rc}">${i+1}</span></td><td style="font-weight:500">${nm}</td><td>${dt.n}</td><td style="color:var(--teal);font-weight:500">${fmtC(dt.v)}</td></tr>`});h+='</tbody></table>';document.getElementById('topTbl').innerHTML=h}
 
-function onFilter(){['fCat','fStat','fState','fCont'].forEach(id=>{const s=document.getElementById(id);s.classList.toggle('active',s.value!=='All')});const btn=document.getElementById('btnReset');btn.classList.toggle('visible',filterActive());const P=filtered();updKPI(P);updAlert(P);renderAll(P)}
-function resetFilters(){document.getElementById('fCat').value='All';document.getElementById('fStat').value='All';document.getElementById('fState').value='All';document.getElementById('fCont').value='All';onFilter()}
+function rCat(P){
+    const d={};ALL.forEach(p=>{if(!(p.category in d))d[p.category]=0});P.forEach(p=>d[p.category]=(d[p.category]||0)+p.cur);
+    const data={labels:Object.keys(d),datasets:[{data:Object.values(d),backgroundColor:['#f59e0b','#14b8a6','#f87171','#818cf8','#34d399','#38bdf8','#fb7185','#a78bfa','#a3e635','#fb923c'],borderRadius:3,borderSkipped:false}]};
+    if(chCat){chCat.data=data;chCat.update()}else{
+        chCat=new Chart(document.getElementById('cCat'),{type:'bar',data,options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmtC(c.raw)}}},scales:{x:{grid:{display:false},ticks:{font:{size:8},maxRotation:45}},y:{grid:{color:'rgba(38,42,56,0.3)'},ticks:{callback:v=>fmtC(v),font:{size:8}}}}}});
+    }
+}
 
-/* ==================================================================
-   4. 初始化 (async)
-   ================================================================== */
-(async function init(){
+function rStat(P){
+    const d={'Completed':0,'Delayed':0,'In Progress':0,'Planning':0};P.forEach(p=>d[p.status]=(d[p.status]||0)+1);
+    const data={labels:Object.keys(d),datasets:[{data:Object.values(d),backgroundColor:['#22c55e','#ef4444','#f59e0b','#818cf8'],borderWidth:0,hoverOffset:5}]};
+    const total=P.length;
+    if(chStat){chStat.data=data;chStat.options.plugins.centerTxt={text:total,color:'#e5e7eb',sub:'Total'};chStat.update()}else{
+        chStat=new Chart(document.getElementById('cStat'),{type:'doughnut',data,options:{responsive:true,maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom',labels:{font:{size:9},padding:isSmall?2:4}},tooltip:{callbacks:{label:pctTooltip}},centerTxt:{text:total,color:'#e5e7eb',sub:'Total'}}}});
+    }
+}
+
+function rRisk(P){
+    const d={'Low':0,'Medium':0,'High':0};P.forEach(p=>d[p.risk]=(d[p.risk]||0)+1);
+    const data={labels:Object.keys(d),datasets:[{data:Object.values(d),backgroundColor:['#22c55e','#f59e0b','#ef4444'],borderWidth:0,hoverOffset:5}]};
+    const hi=d['High'];
+    if(chRisk){chRisk.data=data;chRisk.options.plugins.centerTxt={text:hi,color:'#ef4444',sub:'High Risk'};chRisk.update()}else{
+        chRisk=new Chart(document.getElementById('cRisk'),{type:'doughnut',data,options:{responsive:true,maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom',labels:{font:{size:9},padding:isSmall?2:4}},tooltip:{callbacks:{label:pctTooltip}},centerTxt:{text:hi,color:'#ef4444',sub:'High Risk'}}}});
+    }
+}
+
+function rOnTime(P){
+    const completed=P.filter(p=>p.status==='Completed');
+    const onTime=completed.filter(p=>p.onTime===true).length;
+    const delayedFin=completed.filter(p=>p.onTime===false).length;
+    const notComp=P.filter(p=>p.status!=='Completed').length;
+    const pct=completed.length?((onTime/completed.length)*100).toFixed(1):'0.0';
+    const data={labels:['On Time','Delayed Finish','Not Completed'],datasets:[{data:[onTime,delayedFin,notComp],backgroundColor:['#22c55e','#ef4444','#f59e0b'],borderWidth:0,hoverOffset:5}]};
+    if(chOnT){chOnT.data=data;chOnT.options.plugins.centerTxt={text:pct+'%',color:'#22c55e',sub:'Of Completed'};chOnT.update()}else{
+        chOnT=new Chart(document.getElementById('cOnTime'),{type:'doughnut',data,options:{responsive:true,maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom',labels:{font:{size:9},padding:isSmall?2:4}},tooltip:{callbacks:{label:pctTooltip}},centerTxt:{text:pct+'%',color:'#22c55e',sub:'Of Completed'}}}});
+    }
+}
+
+function rPaid(P){
+    const d={};P.forEach(p=>d[p.contractor]=(d[p.contractor]||0)+p.paid);
+    const s=Object.entries(d).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    const data={labels:s.map(x=>x[0]),datasets:[{data:s.map(x=>x[1]),backgroundColor:'#14b8a6',borderRadius:3,borderSkipped:false}]};
+    if(chPaid){chPaid.data=data;chPaid.update()}else{
+        chPaid=new Chart(document.getElementById('cPaid'),{type:'bar',data,options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmtC(c.raw)}}},scales:{x:{grid:{color:'rgba(38,42,56,0.3)'},ticks:{callback:v=>fmtC(v),font:{size:8}}},y:{grid:{display:false},ticks:{font:{size:8}}}}}});
+    }
+}
+
+function rTrend(P){
+    const d={};P.forEach(p=>{const k=p.startD.getFullYear()+'-'+String(p.startD.getMonth()+1).padStart(2,'0');d[k]=(d[k]||0)+p.cur});
+    const sm=Object.keys(d).sort();
+    const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const labels=sm.map(m=>{const[y,mo]=m.split('-');return mn[parseInt(mo)-1]+" '"+y.slice(2)});
+    const data={labels,datasets:[{data:sm.map(m=>d[m]),borderColor:'#14b8a6',backgroundColor:'rgba(20,184,166,0.08)',fill:true,tension:0.35,pointRadius:2,pointBackgroundColor:'#f59e0b',pointBorderColor:'#f59e0b',borderWidth:1.5}]};
+    if(chTrend){chTrend.data=data;chTrend.update()}else{
+        chTrend=new Chart(document.getElementById('cTrend'),{type:'line',data,options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmtC(c.raw)}}},scales:{x:{grid:{display:false},ticks:{font:{size:8},maxRotation:45}},y:{grid:{color:'rgba(38,42,56,0.3)'},ticks:{callback:v=>fmtC(v),font:{size:8}}}}}});
+    }
+}
+
+function rTable(P){
+    const d={};P.forEach(p=>{if(!d[p.contractor])d[p.contractor]={v:0,n:0};d[p.contractor].v+=p.cur;d[p.contractor].n++});
+    const s=Object.entries(d).sort((a,b)=>b[1].v-a[1].v).slice(0,10);
+    let h='<table><thead><tr><th>Rank</th><th>Contractor</th><th>Projects</th><th>Value</th></tr></thead><tbody>';
+    s.forEach(([nm,dt],i)=>{
+        const rc=i<3?'var(--accent)':'var(--muted)',rb=i<3?'var(--accent-dim)':'transparent';
+        h+=`<tr><td><span class="rank-badge" style="background:${rb};color:${rc}">${i+1}</span></td><td style="font-weight:500">${nm}</td><td>${dt.n}</td><td style="color:var(--teal);font-weight:500">${fmtC(dt.v)}</td></tr>`;
+    });
+    h+='</tbody></table>';
+    document.getElementById('topTbl').innerHTML=h;
+}
+
+function onFilter(){
+    ['fCat','fStat','fState','fCont'].forEach(id=>{const s=document.getElementById(id);s.classList.toggle('active',s.value!=='All')});
+    const P=filtered();
+    updKPI(P);updAlert(P);renderAll(P);
+}
+
+/* ==================== 启动 ==================== */
+function boot(){
     const now=new Date();
     document.getElementById('headerDate').textContent=now.toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'});
-
-    // 显示加载
-    document.getElementById('kContract').textContent='Loading...';
-
-    // 从 Sheet 加载
-    const ok=await loadSheet();
-    if(!ok||ALL.length===0){
-        document.getElementById('kTotal').textContent='—';
-        document.getElementById('kContract').textContent='Error';
-        const box=document.getElementById('alertBox');
-        document.getElementById('alertText').textContent='无法连接 Google Sheet，请检查链接或网络';
-        box.classList.add('visible');
-        return;
-    }
-
-    document.getElementById('headerCount').textContent=ALL.length+' Active Projects';
     popFilters();
     const P=filtered();
     updKPI(P);updAlert(P);renderAll(P);
+}
+
+(async function init(){
+    const ok = await loadSheet();
+    if (!ok) { showFallback(); ALL=[]; TOTAL_PROJECTS=0; }
+    boot();
 })();
 </script>
 </body>
