@@ -132,11 +132,11 @@
 
 <script>
 // ==================== 配置：只改这里 ====================
-const SHEET_ID = '1aBcD...你的表格ID...123'; // 从 /d/ 后面复制
+const SHEET_ID = '1ZSo9azg8gLGZIkajbx54nqWbxsdmM_R51cfIiXihkpM'; // 从 /d/ 后面复制
 const SHEET_NAME = 'Sheet1';                 // 你的工作表名字
 // =======================================================
 
-const AUTO_CSV_URL = `https://docs.google.com/spreadsheets/d/e/2PACX-1vRU5DURgAOvaa2LeHJZQ9dIRUkq3UE5FeGw2Yy2c_xQyXQz9EwbETlEZ3v0BZubeD3DL8vwiUxUZtyK/pub?gid=980586329&single=true&output=csv`;
+const AUTO_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
 
 let ALL = [];
 let TOTAL_PROJECTS = 0;
