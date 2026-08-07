@@ -26,8 +26,11 @@
         *{margin:0;padding:0;box-sizing:border-box}
         html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);color:var(--fg);font-family:'DM Sans',sans-serif}
         h1,h2,h3,h4,h5{font-family:'Space Grotesk',sans-serif}
+
         body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(circle,rgba(245,158,11,0.025) 1px,transparent 1px);background-size:28px 28px;pointer-events:none;z-index:0}
+
         .dashboard{display:flex;flex-direction:column;height:100vh;width:100vw;position:relative;z-index:1}
+
         .header{height:42px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:linear-gradient(90deg,var(--card) 0%,rgba(245,158,11,0.06) 50%,var(--card) 100%);border-bottom:1px solid var(--border);flex-shrink:0}
         .header-left{display:flex;align-items:center;gap:10px}
         .header-icon{color:var(--accent);font-size:17px;filter:drop-shadow(0 0 6px rgba(245,158,11,0.4))}
@@ -37,17 +40,22 @@
         .header-count{color:var(--fg);font-weight:600}
         .live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--success);margin-right:4px;animation:pulse 2s infinite}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
         .content{flex:1;display:flex;flex-direction:column;padding:8px 14px;gap:6px;min-height:0}
+
         .filters{display:flex;gap:14px;align-items:center;height:34px;flex-shrink:0}
         .filter-group{display:flex;align-items:center;gap:5px}
         .filter-label{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px}
         .filter-select{background:var(--card);border:1px solid var(--border);color:var(--fg);padding:4px 26px 4px 9px;border-radius:5px;font-size:11px;font-family:'DM Sans',sans-serif;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='%236b7280' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 7px center;transition:border-color .2s,box-shadow .2s;max-width:150px}
         .filter-select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-dim)}
         .filter-select.active{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-dim)}
+
         .btn-reset{background:transparent;border:1px solid var(--border);color:var(--muted);padding:3px 10px;border-radius:5px;font-size:10px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .2s;font-weight:500;letter-spacing:0.3px;display:none;align-items:center;gap:4px}
         .btn-reset.visible{display:inline-flex}
         .btn-reset:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+
         .warning-banner{font-size:10px;color:var(--danger);display:flex;align-items:center;gap:5px;font-weight:500}
+
         .kpi-row{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;flex-shrink:0}
         .kpi-card{background:var(--card);border:1px solid var(--border);border-radius:7px;padding:6px 10px;display:flex;flex-direction:column;justify-content:center;position:relative;overflow:hidden;transition:border-color .25s,transform .15s}
         .kpi-card:hover{border-color:var(--accent);transform:translateY(-1px)}
@@ -56,28 +64,46 @@
         .kpi-label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:1px}
         .kpi-value{font-size:18px;font-weight:700;font-family:'Space Grotesk',sans-serif;color:var(--heading);line-height:1.15}
         .kpi-value.accent{color:var(--accent)}.kpi-value.danger{color:var(--danger)}.kpi-value.success{color:var(--success)}.kpi-value.teal{color:var(--teal)}
+
         .charts-area{flex:1;display:flex;flex-direction:column;gap:6px;min-height:0}
         .chart-row{flex:1;display:flex;gap:6px;min-height:0}
         .chart-card{background:var(--card);border:1px solid var(--border);border-radius:7px;padding:8px 10px;display:flex;flex-direction:column;min-height:0;min-width:0;transition:border-color .25s}
         .chart-card:hover{border-color:rgba(245,158,11,0.3)}
         .chart-title{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px;font-family:'Space Grotesk',sans-serif;flex-shrink:0}
         .chart-container{flex:1;position:relative;min-height:0}
+
         .top-table{flex:1;overflow:auto;min-height:0}
         .top-table table{width:100%;border-collapse:collapse;font-size:10px}
         .top-table th{text-align:left;color:var(--muted);font-weight:600;font-size:9px;text-transform:uppercase;letter-spacing:0.5px;padding:3px 5px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--card)}
         .top-table td{padding:2px 5px;border-bottom:1px solid rgba(38,42,56,0.4);color:var(--fg)}
         .top-table tr:hover td{background:var(--card-hover)}
         .rank-badge{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;font-size:9px;font-weight:700}
+
         .alert-box{position:fixed;bottom:10px;left:14px;z-index:100;background:rgba(12,14,20,0.92);border:1px solid var(--accent);border-radius:7px;padding:7px 13px;font-size:11px;color:var(--accent);font-weight:500;display:none;align-items:center;gap:7px;backdrop-filter:blur(10px);max-width:560px;box-shadow:0 4px 20px rgba(245,158,11,0.12),inset 0 0 30px rgba(245,158,11,0.03)}
         .alert-box.visible{display:flex;animation:slideIn .35s ease-out}
         @keyframes slideIn{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
         .alert-box i{font-size:12px}
         .alert-clear{background:none;border:none;color:var(--heading);font-size:10px;font-family:'DM Sans',sans-serif;cursor:pointer;padding:2px 7px;border-radius:4px;text-decoration:underline;text-underline-offset:2px;transition:color .2s;font-weight:500;white-space:nowrap}
         .alert-clear:hover{color:#fff}
+
         ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-track{background:var(--card)}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-        @media(max-height:800px){.kpi-value{font-size:15px}.kpi-label{font-size:8px}.kpi-card{padding:4px 8px}.chart-title{font-size:9px;margin-bottom:2px}.chart-card{padding:6px 8px}.header{height:36px}.filters{height:28px}.content{padding:5px 10px;gap:4px}.charts-area{gap:4px}.chart-row{gap:4px}}
+
+        @media(max-height:800px){
+            .kpi-value{font-size:15px}
+            .kpi-label{font-size:8px}
+            .kpi-card{padding:4px 8px}
+            .chart-title{font-size:9px;margin-bottom:2px}
+            .chart-card{padding:6px 8px}
+            .header{height:36px}
+            .filters{height:28px}
+            .content{padding:5px 10px;gap:4px}
+            .charts-area{gap:4px}
+            .chart-row{gap:4px}
+        }
+
         @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
     </style>
+<base target="_blank">
 </head>
 <body>
 <div class="dashboard">
@@ -85,14 +111,15 @@
         <div class="header-left">
             <i class="fas fa-hard-hat header-icon"></i>
             <h1 class="header-title">Construction Dashboard</h1>
-            <span class="header-sub">Google Sheets · Real-time</span>
+            <span class="header-sub">Formula-driven · Real-time analytics</span>
         </div>
         <div class="header-right">
             <span><span class="live-dot"></span>Live</span>
-            <span class="header-count" id="headerCount">—</span>
+            <span class="header-count" id="headerCount">500 Active Projects</span>
             <span id="headerDate"></span>
         </div>
     </header>
+
     <div class="content">
         <div class="filters">
             <div class="filter-group"><span class="filter-label">Category</span><select id="fCat" class="filter-select" onchange="onFilter()"><option value="All">All</option></select></div>
@@ -103,6 +130,7 @@
             <div style="flex:1"></div>
             <div id="warnBanner" class="warning-banner" style="display:none"><i class="fas fa-exclamation-triangle"></i><span id="warnText"></span></div>
         </div>
+
         <div class="kpi-row">
             <div class="kpi-card"><span class="kpi-label">Total Projects</span><span class="kpi-value" id="kTotal">0</span></div>
             <div class="kpi-card"><span class="kpi-label">Contract Value</span><span class="kpi-value accent" id="kContract">$0</span></div>
@@ -113,6 +141,7 @@
             <div class="kpi-card"><span class="kpi-label">Delayed</span><span class="kpi-value danger" id="kDelay">0</span></div>
             <div class="kpi-card"><span class="kpi-label">High Risk</span><span class="kpi-value danger" id="kRisk">0</span></div>
         </div>
+
         <div class="charts-area">
             <div class="chart-row">
                 <div class="chart-card" style="flex:2.4"><div class="chart-title">Contract Value by Category</div><div class="chart-container"><canvas id="cCat"></canvas></div></div>
@@ -128,11 +157,16 @@
         </div>
     </div>
 </div>
-<div class="alert-box" id="alertBox"><i class="fas fa-filter"></i><span id="alertText"></span><button class="alert-clear" onclick="resetFilters()">Clear Filters</button></div>
+
+<div class="alert-box" id="alertBox">
+    <i class="fas fa-filter"></i>
+    <span id="alertText"></span>
+    <button class="alert-clear" onclick="resetFilters()">Clear Filters</button>
+</div>
 
 <script>
 /* ==================== Google Sheets 配置 ==================== */
-const SHEET_ID = '1ZSo9azg8gLGZIkajbx54nqWbxsdmM_R51cfIiXihkpM';   // ← 改成你的表格ID
+const SHEET_ID = '1aBcD...你的表格ID...123';   // ← 改成你的表格ID
 const SHEET_NAME = 'Sheet1';                     // ← 改成你的工作表名
 const AUTO_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
 
@@ -160,6 +194,11 @@ function normalizeRow(row) {
         return '';
     };
     const num = (v) => Number((v || '0').toString().replace(/[$,]/g, ''));
+    const parseDate = (v) => { const d = new Date(v); return isNaN(d) ? new Date() : d; };
+
+    const actF_raw = get(['Actual Finish','actF']);
+    const expF_raw = get(['Expected Finish','expF']);
+
     return {
         id: get(['Project ID','ID','id']),
         contractor: get(['Contractor','contractor']),
@@ -167,22 +206,29 @@ function normalizeRow(row) {
         state: get(['State','state']),
         city: get(['City','city']),
         status: get(['Status','status']),
-        risk: get(['Risk','risk']),
+        risk: get(['Risk Level','Risk','risk']),
         cv: num(get(['Contract Value','cv'])),
-        var_: num(get(['Variation','Var','var_','var'])),
-        cur: num(get(['Current Value','cur','Current'])),
-        paid: num(get(['Paid','Paid to Date','paid'])),
+        var_: num(get(['Variation Value','Variation','Var','var_','var'])),
+        cur: num(get(['Current Contract','Current Value','cur','Current'])),
+        paid: num(get(['Paid to Date','Paid','paid'])),
         out: num(get(['Outstanding','out'])),
-        comp: Number(get(['Completion','comp','% Complete']) || 0),
-        startD: new Date(get(['Start Date','startD','Start'])),
-        expF: new Date(get(['Expected Finish','expF','Expected'])),
-        actF: (()=>{const v=get(['Actual Finish','actF','Actual']); return v?new Date(v):null;})(),
-        onTime: (get(['On Time','onTime','Ontime'])||'').toString().toLowerCase()==='true',
+        comp: Number(get(['Completion %','Completion','comp','% Complete']) || 0),
+        startD: parseDate(get(['Start Date','startD','Start'])),
+        expF: parseDate(expF_raw),
+        actF: actF_raw ? parseDate(actF_raw) : null,
+        onTime: (() => {
+            const raw = get(['On Time','onTime']);
+            if (raw) return raw.toString().toLowerCase() === 'true';
+            if (actF_raw && expF_raw) {
+                return new Date(actF_raw) <= new Date(expF_raw);
+            }
+            return null;
+        })(),
         priority: get(['Priority','priority']),
         client: get(['Client','client']),
-        manager: get(['Manager','manager']),
-        inv: Number(get(['Invoices','inv']) || 0),
-        rating: Number(get(['Rating','rating']) || 0)
+        manager: get(['Project Manager','Manager','manager']),
+        inv: Number(get(['Invoice Count','Invoices','inv']) || 0),
+        rating: Number(get(['Contractor Rating','Rating','rating']) || 0)
     };
 }
 
@@ -221,7 +267,7 @@ function showFallback() {
     document.getElementById('alertText').innerHTML =
         `无法自动连接 Google Sheets。<br>
          <input type="file" id="csvUp" accept=".csv" style="display:none">
-         <button onclick="document.getElementById('csvUp').click()" style="margin-top:6px;padding:3px 10px;border-radius:4px;border:1px solid var(--accent);background:var(--accent-dim);color:var(--accent);cursor:pointer">📁 上传 CSV 文件</button>`;
+         <button onclick="document.getElementById('csvUp').click()" style="margin-top:6px;padding:3px 10px;border-radius:4px;border:1px solid var(--accent);background:var(--accent-dim);color:var(--accent);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:11px">📁 上传 CSV 文件</button>`;
     box.classList.add('visible');
     document.getElementById('csvUp').addEventListener('change', e => {
         if(e.target.files[0]) loadFile(e.target.files[0]);
@@ -232,7 +278,7 @@ function showFallback() {
 function popFilters(){
     const fill=(id,opts)=>{
         const s=document.getElementById(id);
-        while(s.options.length>1) s.remove(1); // 清空旧选项，保留 All
+        while(s.options.length>1) s.remove(1);
         [...new Set(opts)].sort().forEach(o=>{
             if(!o) return;
             const op=document.createElement('option');
