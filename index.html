@@ -132,9 +132,9 @@
 
 <script>
 /* ==================== Google Sheets 配置 ==================== */
-const SHEET_ID = '1ZSo9azg8gLGZIkajbx54nqWbxsdmM_R51cfIiXihkpM';   // ← 你的表格ID
-const SHEET_NAME = 'Project';                     // ← 你的工作表名
-const AUTO_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
+// 隐藏了真实的 Sheet ID，并通过 Token 验证保护数据接口
+const AUTO_CSV_URL = 'https://script.google.com/macros/s/AKfycbxSxAj64jng27rwT2m3z74wm4Vz2-xiqORZz3XSx9J-0e0LmxsQ6FNOZhuNiNLwaK_m/exec?token=X7k9mP2qR5';
+// =======================================================
 
 /* ==================== 全局数据 ==================== */
 let ALL = [];
@@ -214,7 +214,7 @@ function normalizeRow(row) {
 
 async function loadSheet() {
     try {
-        const res = await fetch(AUTO_CSV_URL);
+        const res = await fetch(AUTO_CSV_URL, { redirect: "follow" });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const csv = await res.text();
         if (csv.trim().startsWith('<!DOCTYPE')) throw new Error('表格未公开，请检查 Share 权限');
