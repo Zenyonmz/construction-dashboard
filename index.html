@@ -132,8 +132,8 @@
 
 <script>
 /* ==================== Google Sheets 配置 ==================== */
-const SHEET_ID = '1ZSo9azg8gLGZIkajbx54nqWbxsdmM_R51cfIiXihkpM';   // ← 改成你的表格ID
-const SHEET_NAME = 'Project';                     // ← 改成你的工作表名
+const SHEET_ID = '1ZSo9azg8gLGZIkajbx54nqWbxsdmM_R51cfIiXihkpM';   // ← 你的表格ID
+const SHEET_NAME = 'Project';                     // ← 你的工作表名
 const AUTO_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
 
 /* ==================== 全局数据 ==================== */
@@ -149,40 +149,66 @@ function pctTooltip(ctx){
     return ctx.label+': '+fmtN(ctx.raw)+' ('+pct+'%)';
 }
 
+// 专门处理 DD/MM/YYYY 格式的日期，防止 JS 解析报错
+function pD(dStr) {
+    if (!dStr) return null;
+    const parts = dStr.toString().split('/');
+    if (parts.length === 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1; // 月份是 0-11
+        const year = parseInt(parts[2], 10);
+        const d = new Date(year, month, day);
+        if (!isNaN(d)) return d;
+    }
+    const fallback = new Date(dStr);
+    return isNaN(fallback) ? null : fallback;
+}
+
 /* ==================== Sheets 数据加载 ==================== */
 function normalizeRow(row) {
     const keys = Object.keys(row);
     const get = (names) => {
         for (let n of names) {
-            const m = keys.find(k => k.toLowerCase().replace(/\s/g,'') === n.toLowerCase().replace(/\s/g,''));
+            const m = keys.find(k => k.toLowerCase().replace(/\s/g,'').replace(/%/g,'') === n.toLowerCase().replace(/\s/g,'').replace(/%/g,''));
             if (m !== undefined) return row[m];
         }
         return '';
     };
-    const num = (v) => Number((v || '0').toString().replace(/[$,]/g, ''));
+    const num = (v) => Number((v || '0').toString().replace(/[^0-9.-]/g, '')) || 0;
+    
+    const status = (get(['Status','status']) || '').trim();
+    const expF = pD(get(['Expected Finish','expF','Expected']));
+    const actF = (()=>{const v=get(['Actual Finish','actF','Actual']); return v?pD(v):null;})();
+    
+    // 自动计算 OnTime
+    let onTime = null;
+    if (status === 'Completed') {
+        onTime = (actF && expF) ? (actF <= expF) : false;
+    }
+
     return {
-        id: get(['Project ID','ID','id']),
-        contractor: get(['Contractor','contractor']),
-        category: get(['Category','category']),
-        state: get(['State','state']),
-        city: get(['City','city']),
-        status: get(['Status','status']),
-        risk: get(['Risk','risk']),
-        cv: num(get(['Contract Value','cv'])),
-        var_: num(get(['Variation','Var','var_','var'])),
-        cur: num(get(['Current Value','cur','Current'])),
-        paid: num(get(['Paid','Paid to Date','paid'])),
-        out: num(get(['Outstanding','out'])),
-        comp: Number(get(['Completion','comp','% Complete']) || 0),
-        startD: new Date(get(['Start Date','startD','Start'])),
-        expF: new Date(get(['Expected Finish','expF','Expected'])),
-        actF: (()=>{const v=get(['Actual Finish','actF','Actual']); return v?new Date(v):null;})(),
-        onTime: (get(['On Time','onTime','Ontime'])||'').toString().toLowerCase()==='true',
-        priority: get(['Priority','priority']),
-        client: get(['Client','client']),
-        manager: get(['Manager','manager']),
-        inv: Number(get(['Invoices','inv']) || 0),
-        rating: Number(get(['Rating','rating']) || 0)
+        id: get(['Project ID','ID','id','项目ID','编号']),
+        contractor: get(['Contractor','contractor','承包商','施工单位']),
+        category: get(['Category','category','类别','分类']),
+        state: get(['State','state','州','省份']),
+        city: get(['City','city','城市']),
+        status: status,
+        risk: get(['Risk','risk','Risk Level','风险','等级']),
+        cv: num(get(['Contract Value','cv','Contract Amount','合同金额'])),
+        var_: num(get(['Variation','Var','var_','var','变更金额'])),
+        cur: num(get(['Current Value','cur','Current','Current Contract','当前金额'])),
+        paid: num(get(['Paid','Paid to Date','paid','已付款','已支付'])),
+        out: num(get(['Outstanding','out','Outstanding Amount','未付款','欠款'])),
+        comp: num(get(['Completion','comp','% Complete','Completion %','完成度','进度'])),
+        startD: pD(get(['Start Date','startD','Start','开始日期'])),
+        expF: expF,
+        actF: actF,
+        onTime: onTime, // 使用计算出的 onTime
+        priority: get(['Priority','priority','优先级']),
+        client: get(['Client','client','客户','甲方']),
+        manager: get(['Manager','manager','PM','项目经理','负责人']),
+        inv: num(get(['Invoices','inv','Invoice Count','发票数量'])),
+        rating: num(get(['Rating','rating','Contractor Rating','评分']))
     };
 }
 
@@ -404,7 +430,13 @@ function rPaid(P){
 }
 
 function rTrend(P){
-    const d={};P.forEach(p=>{const k=p.startD.getFullYear()+'-'+String(p.startD.getMonth()+1).padStart(2,'0');d[k]=(d[k]||0)+p.cur});
+    const d={};
+    P.forEach(p=>{
+        // 必须验证日期有效性，否则 getFullYear() 会报错导致图表崩溃
+        if(!p.startD || isNaN(p.startD)) return; 
+        const k=p.startD.getFullYear()+'-'+String(p.startD.getMonth()+1).padStart(2,'0');
+        d[k]=(d[k]||0)+p.cur;
+    });
     const sm=Object.keys(d).sort();
     const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const labels=sm.map(m=>{const[y,mo]=m.split('-');return mn[parseInt(mo)-1]+" '"+y.slice(2)});
